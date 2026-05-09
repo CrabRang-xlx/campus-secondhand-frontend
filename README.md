@@ -224,9 +224,10 @@ UPDATE user SET role = 'ADMIN' WHERE id = 你的用户ID;
 
 ## 项目截图
 
-### 首页商品列表
-
-![首页商品列表](./docs/images/02_frontend_home_product_list.png)
+项目运行截图已整理在以下目录中：
+```text
+docs/images
+```
 
 ## 10. 项目亮点
 
