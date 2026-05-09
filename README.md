@@ -224,22 +224,10 @@ UPDATE user SET role = 'ADMIN' WHERE id = 你的用户ID;
 
 ## 项目截图
 
-### 1. 后端商品接口返回数据
+项目截图位于：
 
-![后端商品接口返回数据](docs/images/01_backend_products_api.png)
-
-### 2. 前端首页商品列表
-
-![前端首页商品列表](docs/images/02_frontend_home_product_list.png)
-
-### 3. 用户登录成功
-
-![用户登录成功](docs/images/03_user_login_success.png)
-
-### 4. 商品详情与留言
-
-![商品详情与留言](docs/images/04_product_detail_comments.png)
-
+```text
+docs/images
 
 ## 10. 项目亮点
 
