@@ -16,18 +16,39 @@ const commentSubmitting = ref(false)
 const commentMessage = ref('')
 
 const currentUser = ref(null)
+
 const loginForm = ref({
   username: '',
   password: ''
 })
+
 const loginMessage = ref('')
 const loginSubmitting = ref(false)
+
+const showRegister = ref(false)
+
+const registerForm = ref({
+  username: '',
+  password: '',
+  nickname: '',
+  phone: '',
+  email: ''
+})
+
+const registerMessage = ref('')
+const registerSubmitting = ref(false)
 
 const loadCurrentUser = () => {
   const savedUser = localStorage.getItem('currentUser')
   if (savedUser) {
     currentUser.value = JSON.parse(savedUser)
   }
+}
+
+const toggleAuthMode = () => {
+  showRegister.value = !showRegister.value
+  loginMessage.value = ''
+  registerMessage.value = ''
 }
 
 const login = async () => {
@@ -53,7 +74,9 @@ const login = async () => {
     if (response.data.code === 200) {
       currentUser.value = response.data.data
       localStorage.setItem('currentUser', JSON.stringify(response.data.data))
-      loginMessage.value = '登录成功'
+
+      loginMessage.value = ''
+      registerMessage.value = ''
       loginForm.value.password = ''
     } else {
       loginMessage.value = response.data.message || '登录失败'
@@ -65,10 +88,60 @@ const login = async () => {
   }
 }
 
+const register = async () => {
+  if (!registerForm.value.username.trim()) {
+    registerMessage.value = '请输入用户名'
+    return
+  }
+
+  if (!registerForm.value.password.trim()) {
+    registerMessage.value = '请输入密码'
+    return
+  }
+
+  registerSubmitting.value = true
+  registerMessage.value = ''
+
+  try {
+    const response = await axios.post('http://localhost:8080/api/users/register', {
+      username: registerForm.value.username,
+      password: registerForm.value.password,
+      nickname: registerForm.value.nickname,
+      phone: registerForm.value.phone,
+      email: registerForm.value.email
+    })
+
+    if (response.data.code === 200) {
+      registerMessage.value = '注册成功，请登录'
+
+      loginForm.value.username = registerForm.value.username
+      loginForm.value.password = ''
+
+      registerForm.value = {
+        username: '',
+        password: '',
+        nickname: '',
+        phone: '',
+        email: ''
+      }
+
+      showRegister.value = false
+    } else {
+      registerMessage.value = response.data.message || '注册失败'
+    }
+  } catch (error) {
+    registerMessage.value = '注册失败，请确认后端服务已启动'
+  } finally {
+    registerSubmitting.value = false
+  }
+}
+
 const logout = () => {
   currentUser.value = null
   localStorage.removeItem('currentUser')
+
   loginMessage.value = ''
+  registerMessage.value = ''
   commentMessage.value = ''
 }
 
@@ -254,9 +327,15 @@ onMounted(() => {
       </section>
 
       <section v-if="!currentUser && !selectedProduct" class="login-panel">
-        <h2>用户登录</h2>
+        <div class="auth-header">
+          <h2>{{ showRegister ? '用户注册' : '用户登录' }}</h2>
 
-        <div class="login-form">
+          <button class="switch-button" @click="toggleAuthMode">
+            {{ showRegister ? '已有账号，去登录' : '没有账号，去注册' }}
+          </button>
+        </div>
+
+        <div v-if="!showRegister" class="login-form">
           <input
               v-model="loginForm.username"
               type="text"
@@ -275,8 +354,49 @@ onMounted(() => {
           </button>
         </div>
 
-        <p v-if="loginMessage" class="login-message">
+        <div v-else class="register-form">
+          <input
+              v-model="registerForm.username"
+              type="text"
+              placeholder="用户名"
+          />
+
+          <input
+              v-model="registerForm.password"
+              type="password"
+              placeholder="密码"
+          />
+
+          <input
+              v-model="registerForm.nickname"
+              type="text"
+              placeholder="昵称"
+          />
+
+          <input
+              v-model="registerForm.phone"
+              type="text"
+              placeholder="手机号"
+          />
+
+          <input
+              v-model="registerForm.email"
+              type="text"
+              placeholder="邮箱"
+              @keyup.enter="register"
+          />
+
+          <button :disabled="registerSubmitting" @click="register">
+            {{ registerSubmitting ? '注册中...' : '注册' }}
+          </button>
+        </div>
+
+        <p v-if="loginMessage && !showRegister" class="login-message">
           {{ loginMessage }}
+        </p>
+
+        <p v-if="registerMessage" class="login-message">
+          {{ registerMessage }}
         </p>
       </section>
 
@@ -528,9 +648,25 @@ onMounted(() => {
   border: 1px solid #e5e7eb;
 }
 
-.login-panel h2 {
-  margin-top: 0;
+.auth-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+.auth-header h2 {
+  margin: 0;
   font-size: 24px;
+}
+
+.switch-button {
+  border: none;
+  background: #eff6ff;
+  color: #2563eb;
+  padding: 8px 14px;
+  border-radius: 999px;
+  cursor: pointer;
 }
 
 .login-form {
@@ -556,6 +692,33 @@ onMounted(() => {
 }
 
 .login-form button:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+
+.register-form {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.register-form input {
+  padding: 12px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 12px;
+  font-size: 15px;
+}
+
+.register-form button {
+  border: none;
+  background: #2563eb;
+  color: white;
+  padding: 12px 24px;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.register-form button:disabled {
   background: #9ca3af;
   cursor: not-allowed;
 }
