@@ -50,6 +50,11 @@ const productForm = ref({
   imageUrl: ''
 })
 
+const showMyProducts = ref(false)
+const myProducts = ref([])
+const myProductsLoading = ref(false)
+const myProductsMessage = ref('')
+
 const loadCurrentUser = () => {
   const savedUser = localStorage.getItem('currentUser')
   if (savedUser) {
@@ -156,7 +161,11 @@ const logout = () => {
   registerMessage.value = ''
   commentMessage.value = ''
   productMessage.value = ''
+  myProductsMessage.value = ''
+
+  selectedProduct.value = null
   showPublishForm.value = false
+  showMyProducts.value = false
 }
 
 const loadProducts = async () => {
@@ -191,6 +200,7 @@ const searchProducts = async () => {
   errorMessage.value = ''
   selectedProduct.value = null
   showPublishForm.value = false
+  showMyProducts.value = false
 
   try {
     const response = await axios.get(
@@ -230,6 +240,7 @@ const openProductDetail = async (productId) => {
   commentMessage.value = ''
   newCommentContent.value = ''
   showPublishForm.value = false
+  showMyProducts.value = false
 
   try {
     const productResponse = await axios.get(`http://localhost:8080/api/products/${productId}`)
@@ -296,6 +307,7 @@ const openPublishPage = () => {
   comments.value = []
   commentMessage.value = ''
   newCommentContent.value = ''
+  showMyProducts.value = false
 
   if (!currentUser.value) {
     loginMessage.value = '请先登录后再发布商品'
@@ -360,6 +372,97 @@ const createProduct = async () => {
   }
 }
 
+const loadMyProducts = async () => {
+  if (!currentUser.value) {
+    myProductsMessage.value = '请先登录'
+    return
+  }
+
+  myProductsLoading.value = true
+  myProductsMessage.value = ''
+
+  try {
+    const response = await axios.get(`http://localhost:8080/api/products/user/${currentUser.value.id}`)
+
+    if (response.data.code === 200) {
+      myProducts.value = response.data.data
+    } else {
+      myProductsMessage.value = response.data.message || '我的发布加载失败'
+    }
+  } catch (error) {
+    myProductsMessage.value = '我的发布加载失败，请确认后端服务已启动'
+  } finally {
+    myProductsLoading.value = false
+  }
+}
+
+const openMyProductsPage = async () => {
+  selectedProduct.value = null
+  comments.value = []
+  showPublishForm.value = false
+  showMyProducts.value = false
+  myProductsMessage.value = ''
+
+  if (!currentUser.value) {
+    loginMessage.value = '请先登录后查看我的发布'
+    showRegister.value = false
+    return
+  }
+
+  showMyProducts.value = true
+  await loadMyProducts()
+}
+
+const updateMyProductStatus = async (productId, status) => {
+  myProductsMessage.value = ''
+
+  try {
+    const response = await axios.put(
+        `http://localhost:8080/api/products/${productId}/status?status=${status}`
+    )
+
+    if (response.data.code === 200) {
+      myProductsMessage.value = '商品状态更新成功'
+      await loadMyProducts()
+      await loadProducts()
+    } else {
+      myProductsMessage.value = response.data.message || '商品状态更新失败'
+    }
+  } catch (error) {
+    myProductsMessage.value = '商品状态更新失败，请确认后端服务已启动'
+  }
+}
+
+const deleteMyProduct = async (productId) => {
+  if (!currentUser.value) {
+    myProductsMessage.value = '请先登录'
+    return
+  }
+
+  const confirmed = window.confirm('确认删除这个商品吗？删除后不可恢复。')
+  if (!confirmed) {
+    return
+  }
+
+  myProductsMessage.value = ''
+
+  try {
+    const response = await axios.delete(
+        `http://localhost:8080/api/products/${productId}?userId=${currentUser.value.id}`
+    )
+
+    if (response.data.code === 200) {
+      myProductsMessage.value = '商品删除成功'
+      await loadMyProducts()
+      await loadProducts()
+    } else {
+      myProductsMessage.value = response.data.message || '商品删除失败'
+    }
+  } catch (error) {
+    myProductsMessage.value = '商品删除失败，请确认后端服务已启动'
+  }
+}
+
 const backToList = () => {
   selectedProduct.value = null
   comments.value = []
@@ -367,6 +470,8 @@ const backToList = () => {
   newCommentContent.value = ''
   showPublishForm.value = false
   productMessage.value = ''
+  showMyProducts.value = false
+  myProductsMessage.value = ''
 }
 
 onMounted(() => {
@@ -383,7 +488,7 @@ onMounted(() => {
       <nav class="nav">
         <a href="#" @click.prevent="backToList">首页</a>
         <a href="#" @click.prevent="openPublishPage">发布商品</a>
-        <a href="#">我的发布</a>
+        <a href="#" @click.prevent="openMyProductsPage">我的发布</a>
         <a href="#">我的收藏</a>
 
         <span v-if="currentUser" class="user-info">
@@ -401,7 +506,7 @@ onMounted(() => {
         <h1>让校园闲置物品重新流动起来</h1>
         <p>面向学生的二手物品发布、搜索、收藏与留言平台。</p>
 
-        <div v-if="!selectedProduct && !showPublishForm" class="search-box">
+        <div v-if="!selectedProduct && !showPublishForm && !showMyProducts" class="search-box">
           <input
               v-model="keyword"
               type="text"
@@ -413,7 +518,7 @@ onMounted(() => {
         </div>
       </section>
 
-      <section v-if="!currentUser && !selectedProduct && !showPublishForm" class="login-panel">
+      <section v-if="!currentUser && !selectedProduct && !showPublishForm && !showMyProducts" class="login-panel">
         <div class="auth-header">
           <h2>{{ showRegister ? '用户注册' : '用户登录' }}</h2>
 
@@ -536,7 +641,64 @@ onMounted(() => {
         </p>
       </section>
 
-      <section v-if="selectedProduct && !showPublishForm" class="detail-section">
+      <section v-if="showMyProducts" class="my-products-panel">
+        <div class="section-title">
+          <h2>我的发布</h2>
+          <span>当前用户：{{ currentUser?.nickname || currentUser?.username }}</span>
+        </div>
+
+        <div v-if="myProductsLoading" class="message">
+          正在加载我的发布...
+        </div>
+
+        <div v-else-if="myProducts.length === 0" class="message">
+          你还没有发布任何商品
+        </div>
+
+        <div v-else class="my-product-list">
+          <div
+              v-for="product in myProducts"
+              :key="product.id"
+              class="my-product-item"
+          >
+            <div class="my-product-info">
+              <h3>{{ product.title }}</h3>
+              <p>{{ product.description || '暂无描述' }}</p>
+
+              <div class="my-product-meta">
+                <span>价格：￥{{ product.price }}</span>
+                <span>分类：{{ product.category || '其他' }}</span>
+                <span>状态：{{ product.status }}</span>
+                <span>ID：{{ product.id }}</span>
+              </div>
+            </div>
+
+            <div class="my-product-actions">
+              <button @click="updateMyProductStatus(product.id, 'ON_SALE')">
+                设为在售
+              </button>
+
+              <button @click="updateMyProductStatus(product.id, 'SOLD')">
+                设为已售出
+              </button>
+
+              <button @click="updateMyProductStatus(product.id, 'OFF_SHELF')">
+                下架
+              </button>
+
+              <button class="danger-button" @click="deleteMyProduct(product.id)">
+                删除
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <p v-if="myProductsMessage" class="publish-message">
+          {{ myProductsMessage }}
+        </p>
+      </section>
+
+      <section v-if="selectedProduct && !showPublishForm && !showMyProducts" class="detail-section">
         <button class="back-button" @click="backToList">返回商品列表</button>
 
         <div v-if="detailLoading" class="message">
@@ -617,7 +779,7 @@ onMounted(() => {
         </div>
       </section>
 
-      <section v-else-if="!showPublishForm" class="products">
+      <section v-else-if="!showPublishForm && !showMyProducts" class="products">
         <div class="section-title">
           <h2>商品列表</h2>
           <span>数据来自后端 MySQL</span>
@@ -777,7 +939,8 @@ onMounted(() => {
 }
 
 .login-panel,
-.publish-panel {
+.publish-panel,
+.my-products-panel {
   margin-top: 32px;
   background: white;
   border-radius: 20px;
@@ -913,6 +1076,59 @@ onMounted(() => {
 .publish-actions .secondary-button {
   background: #e5e7eb;
   color: #374151;
+}
+
+.my-product-list {
+  display: grid;
+  gap: 16px;
+}
+
+.my-product-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 20px;
+  padding: 20px;
+  background: #f9fafb;
+  border-radius: 16px;
+  border: 1px solid #e5e7eb;
+}
+
+.my-product-info h3 {
+  margin: 0 0 8px;
+  font-size: 20px;
+}
+
+.my-product-info p {
+  color: #6b7280;
+  margin: 0 0 12px;
+}
+
+.my-product-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.my-product-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.my-product-actions button {
+  border: none;
+  background: #2563eb;
+  color: white;
+  padding: 9px 16px;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.my-product-actions .danger-button {
+  background: #ef4444;
 }
 
 .products {
