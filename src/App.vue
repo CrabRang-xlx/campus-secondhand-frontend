@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import axios from 'axios'
 
 const products = ref([])
@@ -61,6 +61,15 @@ const favoriteProducts = ref([])
 const favoritesLoading = ref(false)
 const favoritesMessage = ref('')
 
+const showAdminPage = ref(false)
+const adminTab = ref('users')
+const adminUsers = ref([])
+const adminProducts = ref([])
+const adminLoading = ref(false)
+const adminMessage = ref('')
+
+const isAdmin = computed(() => currentUser.value && currentUser.value.role === 'ADMIN')
+
 const loadCurrentUser = () => {
   const savedUser = localStorage.getItem('currentUser')
   if (savedUser) {
@@ -77,6 +86,7 @@ const clearMessages = () => {
   favoritesMessage.value = ''
   commentMessage.value = ''
   detailMessage.value = ''
+  adminMessage.value = ''
 }
 
 const clearPages = () => {
@@ -84,6 +94,7 @@ const clearPages = () => {
   showPublishForm.value = false
   showMyProducts.value = false
   showMyFavorites.value = false
+  showAdminPage.value = false
 }
 
 const toggleAuthMode = () => {
@@ -186,6 +197,8 @@ const logout = () => {
 
   myProducts.value = []
   favoriteProducts.value = []
+  adminUsers.value = []
+  adminProducts.value = []
 }
 
 const loadProducts = async () => {
@@ -263,6 +276,7 @@ const openProductDetail = async (productId) => {
   showPublishForm.value = false
   showMyProducts.value = false
   showMyFavorites.value = false
+  showAdminPage.value = false
 
   try {
     const productResponse = await axios.get(`http://localhost:8080/api/products/${productId}`)
@@ -573,6 +587,124 @@ const deleteMyProduct = async (productId) => {
   }
 }
 
+const loadAdminUsers = async () => {
+  if (!currentUser.value || !isAdmin.value) {
+    adminMessage.value = '无管理员权限'
+    return
+  }
+
+  adminLoading.value = true
+  adminMessage.value = ''
+
+  try {
+    const response = await axios.get(`http://localhost:8080/api/admin/users?adminId=${currentUser.value.id}`)
+
+    if (response.data.code === 200) {
+      adminUsers.value = response.data.data
+    } else {
+      adminMessage.value = response.data.message || '用户列表加载失败'
+    }
+  } catch (error) {
+    adminMessage.value = '用户列表加载失败，请确认后端服务已启动'
+  } finally {
+    adminLoading.value = false
+  }
+}
+
+const loadAdminProducts = async () => {
+  if (!currentUser.value || !isAdmin.value) {
+    adminMessage.value = '无管理员权限'
+    return
+  }
+
+  adminLoading.value = true
+  adminMessage.value = ''
+
+  try {
+    const response = await axios.get(`http://localhost:8080/api/admin/products?adminId=${currentUser.value.id}`)
+
+    if (response.data.code === 200) {
+      adminProducts.value = response.data.data
+    } else {
+      adminMessage.value = response.data.message || '商品列表加载失败'
+    }
+  } catch (error) {
+    adminMessage.value = '商品列表加载失败，请确认后端服务已启动'
+  } finally {
+    adminLoading.value = false
+  }
+}
+
+const openAdminPage = async () => {
+  clearPages()
+  clearMessages()
+
+  if (!currentUser.value) {
+    loginMessage.value = '请先登录管理员账号'
+    showRegister.value = false
+    return
+  }
+
+  if (!isAdmin.value) {
+    loginMessage.value = '当前账号不是管理员'
+    return
+  }
+
+  showAdminPage.value = true
+  adminTab.value = 'users'
+  await loadAdminUsers()
+}
+
+const switchAdminTab = async (tab) => {
+  adminTab.value = tab
+  adminMessage.value = ''
+
+  if (tab === 'users') {
+    await loadAdminUsers()
+  } else {
+    await loadAdminProducts()
+  }
+}
+
+const updateUserStatus = async (userId, status) => {
+  adminMessage.value = ''
+
+  try {
+    const response = await axios.put(
+        `http://localhost:8080/api/admin/users/${userId}/status?adminId=${currentUser.value.id}&status=${status}`
+    )
+
+    if (response.data.code === 200) {
+      adminMessage.value = status === 1 ? '用户已恢复' : '用户已禁用'
+      await loadAdminUsers()
+    } else {
+      adminMessage.value = response.data.message || '用户状态更新失败'
+    }
+  } catch (error) {
+    adminMessage.value = '用户状态更新失败，请确认后端服务已启动'
+  }
+}
+
+const adminUpdateProductStatus = async (productId, status) => {
+  adminMessage.value = ''
+
+  try {
+    const response = await axios.put(
+        `http://localhost:8080/api/admin/products/${productId}/status?adminId=${currentUser.value.id}&status=${status}`
+    )
+
+    if (response.data.code === 200) {
+      adminMessage.value = '商品状态更新成功'
+      await loadAdminProducts()
+      await loadProducts()
+    } else {
+      adminMessage.value = response.data.message || '商品状态更新失败'
+    }
+  } catch (error) {
+    adminMessage.value = '商品状态更新失败，请确认后端服务已启动'
+  }
+}
+
 const backToList = () => {
   clearPages()
   clearMessages()
@@ -597,6 +729,7 @@ onMounted(() => {
         <a href="#" @click.prevent="openPublishPage">发布商品</a>
         <a href="#" @click.prevent="openMyProductsPage">我的发布</a>
         <a href="#" @click.prevent="openMyFavoritesPage">我的收藏</a>
+        <a v-if="isAdmin" href="#" @click.prevent="openAdminPage">管理员</a>
 
         <span v-if="currentUser" class="user-info">
           {{ currentUser.nickname || currentUser.username }}
@@ -613,7 +746,10 @@ onMounted(() => {
         <h1>让校园闲置物品重新流动起来</h1>
         <p>面向学生的二手物品发布、搜索、收藏与留言平台。</p>
 
-        <div v-if="!selectedProduct && !showPublishForm && !showMyProducts && !showMyFavorites" class="search-box">
+        <div
+            v-if="!selectedProduct && !showPublishForm && !showMyProducts && !showMyFavorites && !showAdminPage"
+            class="search-box"
+        >
           <input
               v-model="keyword"
               type="text"
@@ -625,7 +761,10 @@ onMounted(() => {
         </div>
       </section>
 
-      <section v-if="!currentUser && !selectedProduct && !showPublishForm && !showMyProducts && !showMyFavorites" class="login-panel">
+      <section
+          v-if="!currentUser && !selectedProduct && !showPublishForm && !showMyProducts && !showMyFavorites && !showAdminPage"
+          class="login-panel"
+      >
         <div class="auth-header">
           <h2>{{ showRegister ? '用户注册' : '用户登录' }}</h2>
 
@@ -854,7 +993,115 @@ onMounted(() => {
         </p>
       </section>
 
-      <section v-if="selectedProduct && !showPublishForm && !showMyProducts && !showMyFavorites" class="detail-section">
+      <section v-if="showAdminPage" class="admin-panel">
+        <div class="section-title">
+          <h2>管理员控制台</h2>
+          <span>管理员：{{ currentUser?.nickname || currentUser?.username }}</span>
+        </div>
+
+        <div class="admin-tabs">
+          <button
+              :class="{ active: adminTab === 'users' }"
+              @click="switchAdminTab('users')"
+          >
+            用户管理
+          </button>
+
+          <button
+              :class="{ active: adminTab === 'products' }"
+              @click="switchAdminTab('products')"
+          >
+            商品管理
+          </button>
+        </div>
+
+        <div v-if="adminLoading" class="message">
+          正在加载管理员数据...
+        </div>
+
+        <div v-else-if="adminTab === 'users'" class="admin-table">
+          <div class="admin-row admin-head">
+            <span>ID</span>
+            <span>用户名</span>
+            <span>昵称</span>
+            <span>角色</span>
+            <span>状态</span>
+            <span>操作</span>
+          </div>
+
+          <div
+              v-for="user in adminUsers"
+              :key="user.id"
+              class="admin-row"
+          >
+            <span>{{ user.id }}</span>
+            <span>{{ user.username }}</span>
+            <span>{{ user.nickname || '-' }}</span>
+            <span>{{ user.role }}</span>
+            <span>{{ user.status === 1 ? '正常' : '禁用' }}</span>
+
+            <span class="admin-actions">
+              <button
+                  v-if="user.status === 1"
+                  class="danger-button"
+                  @click="updateUserStatus(user.id, 0)"
+              >
+                禁用
+              </button>
+
+              <button
+                  v-else
+                  @click="updateUserStatus(user.id, 1)"
+              >
+                恢复
+              </button>
+            </span>
+          </div>
+        </div>
+
+        <div v-else class="admin-table product-admin-table">
+          <div class="admin-row admin-head">
+            <span>ID</span>
+            <span>标题</span>
+            <span>发布者</span>
+            <span>价格</span>
+            <span>状态</span>
+            <span>操作</span>
+          </div>
+
+          <div
+              v-for="product in adminProducts"
+              :key="product.id"
+              class="admin-row"
+          >
+            <span>{{ product.id }}</span>
+            <span>{{ product.title }}</span>
+            <span>{{ product.userId }}</span>
+            <span>￥{{ product.price }}</span>
+            <span>{{ product.status }}</span>
+
+            <span class="admin-actions">
+              <button @click="adminUpdateProductStatus(product.id, 'ON_SALE')">
+                上架
+              </button>
+
+              <button @click="adminUpdateProductStatus(product.id, 'SOLD')">
+                已售出
+              </button>
+
+              <button class="danger-button" @click="adminUpdateProductStatus(product.id, 'OFF_SHELF')">
+                下架
+              </button>
+            </span>
+          </div>
+        </div>
+
+        <p v-if="adminMessage" class="publish-message">
+          {{ adminMessage }}
+        </p>
+      </section>
+
+      <section v-if="selectedProduct && !showPublishForm && !showMyProducts && !showMyFavorites && !showAdminPage" class="detail-section">
         <button class="back-button" @click="backToList">返回商品列表</button>
 
         <div v-if="detailLoading" class="message">
@@ -949,7 +1196,7 @@ onMounted(() => {
         </div>
       </section>
 
-      <section v-else-if="!showPublishForm && !showMyProducts && !showMyFavorites" class="products">
+      <section v-else-if="!showPublishForm && !showMyProducts && !showMyFavorites && !showAdminPage" class="products">
         <div class="section-title">
           <h2>商品列表</h2>
           <span>数据来自后端 MySQL</span>
@@ -1110,7 +1357,8 @@ onMounted(() => {
 
 .login-panel,
 .publish-panel,
-.my-products-panel {
+.my-products-panel,
+.admin-panel {
   margin-top: 32px;
   background: white;
   border-radius: 20px;
@@ -1288,8 +1536,71 @@ onMounted(() => {
   white-space: nowrap;
 }
 
+.danger-button,
 .my-product-actions .danger-button {
   background: #ef4444;
+}
+
+.admin-tabs {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.admin-tabs button {
+  border: none;
+  background: #e5e7eb;
+  color: #374151;
+  padding: 10px 18px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.admin-tabs button.active {
+  background: #2563eb;
+  color: white;
+}
+
+.admin-table {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-row {
+  display: grid;
+  grid-template-columns: 80px 1.2fr 1.2fr 1fr 1fr 1.5fr;
+  gap: 12px;
+  align-items: center;
+  padding: 14px;
+  background: #f9fafb;
+  border-radius: 12px;
+  font-size: 14px;
+}
+
+.product-admin-table .admin-row {
+  grid-template-columns: 80px 1.8fr 1fr 1fr 1fr 2fr;
+}
+
+.admin-head {
+  background: #eff6ff;
+  color: #2563eb;
+  font-weight: 700;
+}
+
+.admin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-actions button {
+  border: none;
+  background: #2563eb;
+  color: white;
+  padding: 7px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 13px;
 }
 
 .products {
