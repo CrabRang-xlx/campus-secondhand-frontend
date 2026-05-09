@@ -10,6 +10,7 @@ const keyword = ref('')
 const selectedProduct = ref(null)
 const comments = ref([])
 const detailLoading = ref(false)
+const detailMessage = ref('')
 
 const newCommentContent = ref('')
 const commentSubmitting = ref(false)
@@ -55,11 +56,34 @@ const myProducts = ref([])
 const myProductsLoading = ref(false)
 const myProductsMessage = ref('')
 
+const showMyFavorites = ref(false)
+const favoriteProducts = ref([])
+const favoritesLoading = ref(false)
+const favoritesMessage = ref('')
+
 const loadCurrentUser = () => {
   const savedUser = localStorage.getItem('currentUser')
   if (savedUser) {
     currentUser.value = JSON.parse(savedUser)
   }
+}
+
+const clearMessages = () => {
+  errorMessage.value = ''
+  loginMessage.value = ''
+  registerMessage.value = ''
+  productMessage.value = ''
+  myProductsMessage.value = ''
+  favoritesMessage.value = ''
+  commentMessage.value = ''
+  detailMessage.value = ''
+}
+
+const clearPages = () => {
+  selectedProduct.value = null
+  showPublishForm.value = false
+  showMyProducts.value = false
+  showMyFavorites.value = false
 }
 
 const toggleAuthMode = () => {
@@ -157,15 +181,11 @@ const logout = () => {
   currentUser.value = null
   localStorage.removeItem('currentUser')
 
-  loginMessage.value = ''
-  registerMessage.value = ''
-  commentMessage.value = ''
-  productMessage.value = ''
-  myProductsMessage.value = ''
+  clearMessages()
+  clearPages()
 
-  selectedProduct.value = null
-  showPublishForm.value = false
-  showMyProducts.value = false
+  myProducts.value = []
+  favoriteProducts.value = []
 }
 
 const loadProducts = async () => {
@@ -198,9 +218,7 @@ const searchProducts = async () => {
 
   loading.value = true
   errorMessage.value = ''
-  selectedProduct.value = null
-  showPublishForm.value = false
-  showMyProducts.value = false
+  clearPages()
 
   try {
     const response = await axios.get(
@@ -236,11 +254,15 @@ const loadComments = async (productId) => {
 
 const openProductDetail = async (productId) => {
   detailLoading.value = true
-  errorMessage.value = ''
-  commentMessage.value = ''
+  clearMessages()
+
+  selectedProduct.value = null
+  comments.value = []
   newCommentContent.value = ''
+
   showPublishForm.value = false
   showMyProducts.value = false
+  showMyFavorites.value = false
 
   try {
     const productResponse = await axios.get(`http://localhost:8080/api/products/${productId}`)
@@ -302,22 +324,113 @@ const submitComment = async () => {
   }
 }
 
+const addFavorite = async (productId) => {
+  if (!currentUser.value) {
+    detailMessage.value = '请先登录后再收藏商品'
+    return
+  }
+
+  detailMessage.value = ''
+
+  try {
+    const response = await axios.post(
+        `http://localhost:8080/api/favorites?userId=${currentUser.value.id}&productId=${productId}`
+    )
+
+    if (response.data.code === 200) {
+      detailMessage.value = '收藏成功'
+      await loadMyFavorites(false)
+    } else {
+      detailMessage.value = response.data.message || '收藏失败'
+    }
+  } catch (error) {
+    detailMessage.value = '收藏失败，请确认后端服务已启动'
+  }
+}
+
+const removeFavorite = async (productId, refreshList = true) => {
+  if (!currentUser.value) {
+    favoritesMessage.value = '请先登录'
+    return
+  }
+
+  favoritesMessage.value = ''
+  detailMessage.value = ''
+
+  try {
+    const response = await axios.delete(
+        `http://localhost:8080/api/favorites?userId=${currentUser.value.id}&productId=${productId}`
+    )
+
+    if (response.data.code === 200) {
+      favoritesMessage.value = '取消收藏成功'
+      detailMessage.value = '取消收藏成功'
+
+      if (refreshList) {
+        await loadMyFavorites(false)
+      }
+    } else {
+      favoritesMessage.value = response.data.message || '取消收藏失败'
+      detailMessage.value = response.data.message || '取消收藏失败'
+    }
+  } catch (error) {
+    favoritesMessage.value = '取消收藏失败，请确认后端服务已启动'
+    detailMessage.value = '取消收藏失败，请确认后端服务已启动'
+  }
+}
+
+const loadMyFavorites = async (showLoading = true) => {
+  if (!currentUser.value) {
+    favoritesMessage.value = '请先登录'
+    return
+  }
+
+  if (showLoading) {
+    favoritesLoading.value = true
+  }
+
+  favoritesMessage.value = ''
+
+  try {
+    const response = await axios.get(`http://localhost:8080/api/favorites/user/${currentUser.value.id}`)
+
+    if (response.data.code === 200) {
+      favoriteProducts.value = response.data.data
+    } else {
+      favoritesMessage.value = response.data.message || '我的收藏加载失败'
+    }
+  } catch (error) {
+    favoritesMessage.value = '我的收藏加载失败，请确认后端服务已启动'
+  } finally {
+    favoritesLoading.value = false
+  }
+}
+
+const openMyFavoritesPage = async () => {
+  clearPages()
+  clearMessages()
+
+  if (!currentUser.value) {
+    loginMessage.value = '请先登录后查看我的收藏'
+    showRegister.value = false
+    return
+  }
+
+  showMyFavorites.value = true
+  await loadMyFavorites()
+}
+
 const openPublishPage = () => {
-  selectedProduct.value = null
-  comments.value = []
-  commentMessage.value = ''
-  newCommentContent.value = ''
-  showMyProducts.value = false
+  clearPages()
+  clearMessages()
 
   if (!currentUser.value) {
     loginMessage.value = '请先登录后再发布商品'
     showRegister.value = false
-    showPublishForm.value = false
     return
   }
 
   showPublishForm.value = true
-  productMessage.value = ''
 }
 
 const createProduct = async () => {
@@ -397,11 +510,8 @@ const loadMyProducts = async () => {
 }
 
 const openMyProductsPage = async () => {
-  selectedProduct.value = null
-  comments.value = []
-  showPublishForm.value = false
-  showMyProducts.value = false
-  myProductsMessage.value = ''
+  clearPages()
+  clearMessages()
 
   if (!currentUser.value) {
     loginMessage.value = '请先登录后查看我的发布'
@@ -464,14 +574,11 @@ const deleteMyProduct = async (productId) => {
 }
 
 const backToList = () => {
-  selectedProduct.value = null
+  clearPages()
+  clearMessages()
+
   comments.value = []
-  commentMessage.value = ''
   newCommentContent.value = ''
-  showPublishForm.value = false
-  productMessage.value = ''
-  showMyProducts.value = false
-  myProductsMessage.value = ''
 }
 
 onMounted(() => {
@@ -489,7 +596,7 @@ onMounted(() => {
         <a href="#" @click.prevent="backToList">首页</a>
         <a href="#" @click.prevent="openPublishPage">发布商品</a>
         <a href="#" @click.prevent="openMyProductsPage">我的发布</a>
-        <a href="#">我的收藏</a>
+        <a href="#" @click.prevent="openMyFavoritesPage">我的收藏</a>
 
         <span v-if="currentUser" class="user-info">
           {{ currentUser.nickname || currentUser.username }}
@@ -506,7 +613,7 @@ onMounted(() => {
         <h1>让校园闲置物品重新流动起来</h1>
         <p>面向学生的二手物品发布、搜索、收藏与留言平台。</p>
 
-        <div v-if="!selectedProduct && !showPublishForm && !showMyProducts" class="search-box">
+        <div v-if="!selectedProduct && !showPublishForm && !showMyProducts && !showMyFavorites" class="search-box">
           <input
               v-model="keyword"
               type="text"
@@ -518,7 +625,7 @@ onMounted(() => {
         </div>
       </section>
 
-      <section v-if="!currentUser && !selectedProduct && !showPublishForm && !showMyProducts" class="login-panel">
+      <section v-if="!currentUser && !selectedProduct && !showPublishForm && !showMyProducts && !showMyFavorites" class="login-panel">
         <div class="auth-header">
           <h2>{{ showRegister ? '用户注册' : '用户登录' }}</h2>
 
@@ -698,7 +805,56 @@ onMounted(() => {
         </p>
       </section>
 
-      <section v-if="selectedProduct && !showPublishForm && !showMyProducts" class="detail-section">
+      <section v-if="showMyFavorites" class="my-products-panel">
+        <div class="section-title">
+          <h2>我的收藏</h2>
+          <span>当前用户：{{ currentUser?.nickname || currentUser?.username }}</span>
+        </div>
+
+        <div v-if="favoritesLoading" class="message">
+          正在加载我的收藏...
+        </div>
+
+        <div v-else-if="favoriteProducts.length === 0" class="message">
+          你还没有收藏任何商品
+        </div>
+
+        <div v-else class="my-product-list">
+          <div
+              v-for="product in favoriteProducts"
+              :key="product.id"
+              class="my-product-item"
+          >
+            <div class="my-product-info">
+              <h3>{{ product.title }}</h3>
+              <p>{{ product.description || '暂无描述' }}</p>
+
+              <div class="my-product-meta">
+                <span>价格：￥{{ product.price }}</span>
+                <span>分类：{{ product.category || '其他' }}</span>
+                <span>状态：{{ product.status }}</span>
+                <span>ID：{{ product.id }}</span>
+              </div>
+            </div>
+
+            <div class="my-product-actions">
+              <button @click="openProductDetail(product.id)">
+                查看详情
+              </button>
+
+              <button class="danger-button" @click="removeFavorite(product.id)">
+                取消收藏
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <p v-if="favoritesMessage" class="publish-message">
+          {{ favoritesMessage }}
+        </p>
+      </section>
+
+      <section v-if="selectedProduct && !showPublishForm && !showMyProducts && !showMyFavorites" class="detail-section">
         <button class="back-button" @click="backToList">返回商品列表</button>
 
         <div v-if="detailLoading" class="message">
@@ -728,6 +884,20 @@ onMounted(() => {
                 <span>商品 ID：{{ selectedProduct.id }}</span>
                 <span>发布者 ID：{{ selectedProduct.userId }}</span>
               </div>
+
+              <div class="detail-actions">
+                <button @click="addFavorite(selectedProduct.id)">
+                  收藏商品
+                </button>
+
+                <button class="secondary-button" @click="removeFavorite(selectedProduct.id, false)">
+                  取消收藏
+                </button>
+              </div>
+
+              <p v-if="detailMessage" class="publish-message">
+                {{ detailMessage }}
+              </p>
             </div>
           </div>
 
@@ -779,7 +949,7 @@ onMounted(() => {
         </div>
       </section>
 
-      <section v-else-if="!showPublishForm && !showMyProducts" class="products">
+      <section v-else-if="!showPublishForm && !showMyProducts && !showMyFavorites" class="products">
         <div class="section-title">
           <h2>商品列表</h2>
           <span>数据来自后端 MySQL</span>
@@ -987,7 +1157,8 @@ onMounted(() => {
   font-size: 15px;
 }
 
-.login-form button {
+.login-form button,
+.register-form button {
   border: none;
   background: #2563eb;
   color: white;
@@ -996,7 +1167,8 @@ onMounted(() => {
   cursor: pointer;
 }
 
-.login-form button:disabled {
+.login-form button:disabled,
+.register-form button:disabled {
   background: #9ca3af;
   cursor: not-allowed;
 }
@@ -1012,20 +1184,6 @@ onMounted(() => {
   border: 1px solid #d1d5db;
   border-radius: 12px;
   font-size: 15px;
-}
-
-.register-form button {
-  border: none;
-  background: #2563eb;
-  color: white;
-  padding: 12px 24px;
-  border-radius: 12px;
-  cursor: pointer;
-}
-
-.register-form button:disabled {
-  background: #9ca3af;
-  cursor: not-allowed;
 }
 
 .login-message,
@@ -1054,12 +1212,14 @@ onMounted(() => {
   resize: vertical;
 }
 
-.publish-actions {
+.publish-actions,
+.detail-actions {
   display: flex;
   gap: 12px;
 }
 
-.publish-actions button {
+.publish-actions button,
+.detail-actions button {
   border: none;
   background: #2563eb;
   color: white;
@@ -1073,7 +1233,8 @@ onMounted(() => {
   cursor: not-allowed;
 }
 
-.publish-actions .secondary-button {
+.publish-actions .secondary-button,
+.detail-actions .secondary-button {
   background: #e5e7eb;
   color: #374151;
 }
@@ -1285,6 +1446,10 @@ onMounted(() => {
   display: grid;
   gap: 10px;
   color: #6b7280;
+}
+
+.detail-actions {
+  margin-top: 24px;
 }
 
 .comment-section {
