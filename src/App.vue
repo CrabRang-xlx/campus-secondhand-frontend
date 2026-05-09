@@ -38,6 +38,18 @@ const registerForm = ref({
 const registerMessage = ref('')
 const registerSubmitting = ref(false)
 
+const showPublishForm = ref(false)
+const productSubmitting = ref(false)
+const productMessage = ref('')
+
+const productForm = ref({
+  title: '',
+  description: '',
+  price: '',
+  category: '',
+  imageUrl: ''
+})
+
 const loadCurrentUser = () => {
   const savedUser = localStorage.getItem('currentUser')
   if (savedUser) {
@@ -143,6 +155,8 @@ const logout = () => {
   loginMessage.value = ''
   registerMessage.value = ''
   commentMessage.value = ''
+  productMessage.value = ''
+  showPublishForm.value = false
 }
 
 const loadProducts = async () => {
@@ -176,6 +190,7 @@ const searchProducts = async () => {
   loading.value = true
   errorMessage.value = ''
   selectedProduct.value = null
+  showPublishForm.value = false
 
   try {
     const response = await axios.get(
@@ -214,6 +229,7 @@ const openProductDetail = async (productId) => {
   errorMessage.value = ''
   commentMessage.value = ''
   newCommentContent.value = ''
+  showPublishForm.value = false
 
   try {
     const productResponse = await axios.get(`http://localhost:8080/api/products/${productId}`)
@@ -275,11 +291,82 @@ const submitComment = async () => {
   }
 }
 
+const openPublishPage = () => {
+  selectedProduct.value = null
+  comments.value = []
+  commentMessage.value = ''
+  newCommentContent.value = ''
+
+  if (!currentUser.value) {
+    loginMessage.value = '请先登录后再发布商品'
+    showRegister.value = false
+    showPublishForm.value = false
+    return
+  }
+
+  showPublishForm.value = true
+  productMessage.value = ''
+}
+
+const createProduct = async () => {
+  if (!currentUser.value) {
+    productMessage.value = '请先登录'
+    return
+  }
+
+  if (!productForm.value.title.trim()) {
+    productMessage.value = '商品标题不能为空'
+    return
+  }
+
+  if (!productForm.value.price || Number(productForm.value.price) <= 0) {
+    productMessage.value = '商品价格必须大于0'
+    return
+  }
+
+  productSubmitting.value = true
+  productMessage.value = ''
+
+  try {
+    const response = await axios.post('http://localhost:8080/api/products', {
+      userId: currentUser.value.id,
+      title: productForm.value.title,
+      description: productForm.value.description,
+      price: Number(productForm.value.price),
+      category: productForm.value.category || '其他',
+      imageUrl: productForm.value.imageUrl
+    })
+
+    if (response.data.code === 200) {
+      productMessage.value = '商品发布成功'
+
+      productForm.value = {
+        title: '',
+        description: '',
+        price: '',
+        category: '',
+        imageUrl: ''
+      }
+
+      showPublishForm.value = false
+      await loadProducts()
+    } else {
+      productMessage.value = response.data.message || '商品发布失败'
+    }
+  } catch (error) {
+    productMessage.value = '商品发布失败，请确认后端服务已启动'
+  } finally {
+    productSubmitting.value = false
+  }
+}
+
 const backToList = () => {
   selectedProduct.value = null
   comments.value = []
   commentMessage.value = ''
   newCommentContent.value = ''
+  showPublishForm.value = false
+  productMessage.value = ''
 }
 
 onMounted(() => {
@@ -295,7 +382,7 @@ onMounted(() => {
 
       <nav class="nav">
         <a href="#" @click.prevent="backToList">首页</a>
-        <a href="#">发布商品</a>
+        <a href="#" @click.prevent="openPublishPage">发布商品</a>
         <a href="#">我的发布</a>
         <a href="#">我的收藏</a>
 
@@ -314,7 +401,7 @@ onMounted(() => {
         <h1>让校园闲置物品重新流动起来</h1>
         <p>面向学生的二手物品发布、搜索、收藏与留言平台。</p>
 
-        <div v-if="!selectedProduct" class="search-box">
+        <div v-if="!selectedProduct && !showPublishForm" class="search-box">
           <input
               v-model="keyword"
               type="text"
@@ -326,7 +413,7 @@ onMounted(() => {
         </div>
       </section>
 
-      <section v-if="!currentUser && !selectedProduct" class="login-panel">
+      <section v-if="!currentUser && !selectedProduct && !showPublishForm" class="login-panel">
         <div class="auth-header">
           <h2>{{ showRegister ? '用户注册' : '用户登录' }}</h2>
 
@@ -400,7 +487,56 @@ onMounted(() => {
         </p>
       </section>
 
-      <section v-if="selectedProduct" class="detail-section">
+      <section v-if="showPublishForm" class="publish-panel">
+        <h2>发布商品</h2>
+
+        <div class="publish-form">
+          <input
+              v-model="productForm.title"
+              type="text"
+              placeholder="商品标题"
+          />
+
+          <input
+              v-model="productForm.price"
+              type="number"
+              placeholder="商品价格"
+          />
+
+          <input
+              v-model="productForm.category"
+              type="text"
+              placeholder="商品分类，例如：电子产品 / 图书教材 / 生活用品"
+          />
+
+          <input
+              v-model="productForm.imageUrl"
+              type="text"
+              placeholder="商品图片地址，可暂时不填"
+          />
+
+          <textarea
+              v-model="productForm.description"
+              placeholder="商品描述"
+          ></textarea>
+
+          <div class="publish-actions">
+            <button :disabled="productSubmitting" @click="createProduct">
+              {{ productSubmitting ? '发布中...' : '发布商品' }}
+            </button>
+
+            <button class="secondary-button" @click="backToList">
+              取消
+            </button>
+          </div>
+        </div>
+
+        <p v-if="productMessage" class="publish-message">
+          {{ productMessage }}
+        </p>
+      </section>
+
+      <section v-if="selectedProduct && !showPublishForm" class="detail-section">
         <button class="back-button" @click="backToList">返回商品列表</button>
 
         <div v-if="detailLoading" class="message">
@@ -481,7 +617,7 @@ onMounted(() => {
         </div>
       </section>
 
-      <section v-else class="products">
+      <section v-else-if="!showPublishForm" class="products">
         <div class="section-title">
           <h2>商品列表</h2>
           <span>数据来自后端 MySQL</span>
@@ -640,7 +776,8 @@ onMounted(() => {
   border: 1px solid rgba(255, 255, 255, 0.8);
 }
 
-.login-panel {
+.login-panel,
+.publish-panel {
   margin-top: 32px;
   background: white;
   border-radius: 20px;
@@ -655,9 +792,14 @@ onMounted(() => {
   margin-bottom: 18px;
 }
 
+.auth-header h2,
+.publish-panel h2 {
+  margin: 0 0 18px;
+  font-size: 24px;
+}
+
 .auth-header h2 {
   margin: 0;
-  font-size: 24px;
 }
 
 .switch-button {
@@ -723,10 +865,54 @@ onMounted(() => {
   cursor: not-allowed;
 }
 
-.login-message {
+.login-message,
+.publish-message {
   margin-bottom: 0;
   color: #2563eb;
   font-size: 14px;
+}
+
+.publish-form {
+  display: grid;
+  gap: 14px;
+}
+
+.publish-form input,
+.publish-form textarea {
+  padding: 12px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 12px;
+  font-size: 15px;
+  font-family: Arial, "Microsoft YaHei", sans-serif;
+}
+
+.publish-form textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+.publish-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.publish-actions button {
+  border: none;
+  background: #2563eb;
+  color: white;
+  padding: 12px 24px;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.publish-actions button:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+
+.publish-actions .secondary-button {
+  background: #e5e7eb;
+  color: #374151;
 }
 
 .products {
