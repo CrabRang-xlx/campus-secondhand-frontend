@@ -15,6 +15,13 @@
 
 ---
 
+## 配套后端项目
+
+后端仓库地址：
+
+```text
+https://github.com/CrabRang-xlx/campus-secondhand-backend
+
 ## 2. 技术栈
 
 | 类型 | 技术 |
@@ -214,6 +221,52 @@ UPDATE user SET role = 'ADMIN' WHERE id = 你的用户ID;
 ```
 
 ---
+
+## 项目截图
+
+### 1. 后端商品接口返回数据
+
+![后端商品接口返回数据](docs/images/01_backend_products_api.png)
+
+### 2. 前端首页商品列表
+
+![前端首页商品列表](docs/images/02_frontend_home_product_list.png)
+
+### 3. 用户登录成功
+
+![用户登录成功](docs/images/03_user_login_success.png)
+
+### 4. 商品详情与留言
+
+![商品详情与留言](docs/images/04_product_detail_comments.png)
+
+### 5. 发布商品页面
+
+![发布商品页面](docs/images/05_publish_product_page.png)
+
+### 6. 我的发布页面
+
+![我的发布页面](docs/images/06_my_products_page.png)
+
+### 7. 我的收藏页面
+
+![我的收藏页面](docs/images/07_my_favorites_page.png)
+
+### 8. 管理员用户管理
+
+![管理员用户管理](docs/images/08_admin_user_management.png)
+
+### 9. 管理员商品管理
+
+![管理员商品管理](docs/images/09_admin_product_management.png)
+
+### 10. 后端项目结构
+
+![后端项目结构](docs/images/10_backend_project_structure.png)
+
+### 11. 前端项目结构
+
+![前端项目结构](docs/images/11_frontend_project_structure.png)
 
 ## 10. 项目亮点
 
